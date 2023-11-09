@@ -24,8 +24,23 @@ parser = argparse.ArgumentParser(
                     description='This script will take a CCDI metadata manifest file and converts to a CDS template based on a fixed set of property equivalencies.',
                     )
 
-parser.add_argument( '-f', '--filename', help='CCDI dataset file (.xlsx)', required=True)
-parser.add_argument( '-t', '--template', help="CDS dataset template file, CDS_submission_metadata_template.xlsx", required=True)
+parser._action_groups.pop()
+required_arg = parser.add_argument_group("required arguments")
+optional_arg = parser.add_argument_group("optional arguments")
+
+required_arg.add_argument(
+    '-f',
+    '--filename', 
+    type=str,
+    help='CCDI dataset file (.xlsx)', 
+    required=True)
+
+required_arg.add_argument( 
+    '-t', 
+    '--template', 
+    type=str,
+    help="CDS dataset template file, CDS_submission_metadata_template.xlsx",
+    required=True)
 
 
 argcomplete.autocomplete(parser)
