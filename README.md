@@ -4,7 +4,9 @@ This script will take a [CCDI submission template](https://github.com/CBIIT/ccdi
 Run the following command in a terminal where python is installed for help.
 
 
-```python CCDI-CDS_ConverteRy.py -h```
+```
+python CCDI-CDS_ConverteRy.py -h
+```
 
 ```
 usage: CCDI-CDS_ConverteRy.py [-h] -f FILENAME -t TEMPLATE
