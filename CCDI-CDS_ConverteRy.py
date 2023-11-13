@@ -513,6 +513,7 @@ simple_add('organism_species','organism_species')
 simple_add('methylation_platform','methylation_platform')
 simple_add('reporter_label','reporter_label')
 simple_add('age_at_diagnosis','age_at_diagnosis')
+simple_add('guid','dcf_indexd_guid')
 
 
 #The not applicable transformation that takes any NAs in the data frame and applies "Not Applicable"
@@ -539,6 +540,11 @@ ws.delete_rows(2, ws.max_row)
 #write the data
 for row in dataframe_to_rows(cds_df, index=False, header=False):
     ws.append(row)
+
+#add the GUID column to the template
+sheet= template_workbook['Metadata']
+
+sheet.cell(row=1, column=len(cds_df.columns), value='guid')
 
 #save out template
 template_workbook.save(f'{file_dir_path}/{output_file}.xlsx')
