@@ -458,10 +458,11 @@ simple_add('participant_id','participant_id')
 
 #diagnosis
     #Not a perfect match, some logic required depending on version of CCDI
+    #Also need to deconstruct the setup from `code : term` ----> `term`
 if 'diagnosis_icd_o' in df_join_all.columns:
-    cds_df['primary_diagnosis']=df_join_all['diagnosis_icd_o']
+    cds_df['primary_diagnosis']=df_join_all['diagnosis_icd_o'].str.split(":").str[1].str.strip()
 elif 'diagnosis_classification' in df_join_all.columns:
-    cds_df['primary_diagnosis']=df_join_all['diagnosis_classification']
+    cds_df['primary_diagnosis']=df_join_all['diagnosis_classification'].str.split(":").str[1].str.strip()
 else:
     print("ERROR: No 'primary_diagnosis' was transfered.")
 
