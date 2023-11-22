@@ -364,7 +364,7 @@ simple_add('title','study_short_title')
 if 'authz' in df_join_all.columns:
     cds_df['authz']=df_join_all['authz']
 else:
-    authz=df_join_all['acl'].unique().tolist()[0]
+    authz=df_join_all['acl'].dropna().unique().tolist()[0]
     authz="['/programs/"+authz[2:]
     cds_df['authz']=authz
 
