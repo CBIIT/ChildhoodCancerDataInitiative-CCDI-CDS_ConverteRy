@@ -175,13 +175,13 @@ col_remap= {'study.study_id':'study_id', 'participant.participant_id':'participa
 if 'study_admin' in ccdi_to_cds_nodes:
     df_node=drop_type_id_others(ccdi_dfs['study_admin'],['study.id'])
     df_node.rename(columns=col_remap, inplace=True)
-    df_all = df_all.merge(df_node, left_on='study_id', right_on="study_id")
+    df_all = pd.merge(df_all, df_node, how="left", on="study_id")
 
 #add study_personnel
 if 'study_personnel' in ccdi_to_cds_nodes:
     df_node=drop_type_id_others(ccdi_dfs['study_personnel'],['study.id'])
     df_node.rename(columns=col_remap, inplace=True)
-    df_all = df_all.merge(df_node, left_on='study_id', right_on='study_id')
+    df_all = pd.merge(df_all, df_node, how="left", on="study_id")
 
 #pull out df for study
 df_study_level=df_all
@@ -190,13 +190,13 @@ df_study_level=df_all
 if 'participant' in ccdi_to_cds_nodes:
     df_node=drop_type_id_others(ccdi_dfs['participant'],['study.id'])
     df_node.rename(columns=col_remap, inplace=True)
-    df_all = df_all.merge(df_node, left_on='study_id', right_on='study_id')
+    df_all = pd.merge(df_all, df_node, how="left", on='study_id')
 
 #add diagnosis
 if 'diagnosis' in ccdi_to_cds_nodes:
     df_node=drop_type_id_others(ccdi_dfs['diagnosis'],['participant.id'])
     df_node.rename(columns=col_remap, inplace=True)
-    df_all = df_all.merge(df_node, left_on='participant_id', right_on='participant_id')
+    df_all = pd.merge(df_all, df_node, how="left", on='participant_id')
 
 #pull out df for diagnosis
 df_participant_level=df_all
@@ -205,7 +205,7 @@ df_participant_level=df_all
 if 'sample' in ccdi_to_cds_nodes:
     df_node=drop_type_id_others(ccdi_dfs['sample'],['participant.id'])
     df_node.rename(columns=col_remap, inplace=True)
-    df_all = df_all.merge(df_node, left_on='participant_id', right_on='participant_id')
+    df_all = pd.merge(df_all, df_node, how="left", on='participant_id')
 
 #pull out df for sample
 df_sample_level=df_all
@@ -221,7 +221,6 @@ for col in df_sample_level.columns.tolist():
         col_x=col
         col_base=col[:-2]
         col_y=col_base+"_y"
-        # print(col_base + " : "+col_x+" : "+col_y)
         df_sample_level[col_base] = df_sample_level[col_y].combine_first(df_sample_level[col_x])
         df_sample_level.drop(columns=[col_x,col_y], inplace=True)
 
@@ -280,7 +279,7 @@ df_join_study_add=pd.DataFrame()
 
 #join on sample for all files that have a sample_id for linking
 if 'sample_id' in df_file.columns:
-    df_join_sample = df_sample_level.merge(df_file, how= "right", left_on='sample_id', right_on='sample_id')
+    df_join_sample = pd.merge(df_sample_level, df_file, how= "left", on='sample_id')
 
     #clean up possible duplicates where the sample level outranks file
     for col in df_join_sample.columns.tolist():
@@ -288,7 +287,6 @@ if 'sample_id' in df_file.columns:
             col_x=col
             col_base=col[:-2]
             col_y=col_base+"_y"
-            # print(col_base+" : "+col_x+" : "+col_y)
             df_join_sample[col_base] = df_join_sample[col_x].combine_first(df_join_sample[col_y])
             df_join_sample.drop(columns=[col_x,col_y], inplace=True)
 
@@ -298,7 +296,7 @@ if 'sample_id' in df_file.columns:
 
 #join on participant for all files that have a participant_id for linking
 if 'participant_id' in df_file.columns:
-    df_join_participant = df_participant_level.merge(df_file, how= "right", left_on='participant_id', right_on='participant_id')
+    df_join_participant = pd.merge(df_participant_level, df_file, how= "left", on='participant_id')
 
     #clean up possible duplicates where the participant level outranks file
     for col in df_join_participant.columns.tolist():
@@ -306,7 +304,6 @@ if 'participant_id' in df_file.columns:
             col_x=col
             col_base=col[:-2]
             col_y=col_base+"_y"
-            # print(col_base+" : "+col_x+" : "+col_y)
             df_join_participant[col_base] = df_join_participant[col_x].combine_first(df_join_participant[col_y])
             df_join_participant.drop(columns=[col_x,col_y], inplace=True)
 
@@ -315,7 +312,7 @@ if 'participant_id' in df_file.columns:
 
 #join on study for all files that have a study_id for linking
 if 'study_id' in df_file.columns:
-    df_join_study = df_study_level.merge(df_file, how= "right", left_on='study_id', right_on='study_id')
+    df_join_study = pd.merge(df_study_level, df_file, how= "left", on='study_id')
 
     #clean up possible duplicates where the study level outranks file
     for col in df_join_study.columns.tolist():
@@ -323,7 +320,6 @@ if 'study_id' in df_file.columns:
             col_x=col
             col_base=col[:-2]
             col_y=col_base+"_y"
-            # print(col_base+" : "+col_x+" : "+col_y)
             df_join_study[col_base] = df_join_study[col_x].combine_first(df_join_study[col_y])
             df_join_study.drop(columns=[col_x,col_y], inplace=True)
 
@@ -332,6 +328,7 @@ if 'study_id' in df_file.columns:
 
 #now add all specific data frames together
 df_join_all=pd.concat([df_join_sample_add, df_join_participant_add, df_join_study_add], axis=0)
+df_join_all=df_join_all.reset_index(drop=True)
 
 
 ###############
@@ -447,11 +444,12 @@ for personnel_name in personnel_names:
     elif len(personnel_name)==1:
         last=personnel_name[0]
 
+    #NEEDS TO BE CHANGED SO THAT IS RETURNS THE VALUE AND NOT A COPY, USE df.loc TO HANDLE THIS
     for x in range(0,len(name_apply)):
         if name_apply[x]:
-            cds_df['first_name'][x]=first
-            cds_df['middle_name'][x]=middle
-            cds_df['last_name'][x]=last
+            cds_df.loc[x,'first_name']=first
+            cds_df.loc[x,'middle_name']=middle
+            cds_df.loc[x,'last_name']=last
 
 #participant
 simple_add('participant_id','participant_id')
@@ -515,6 +513,10 @@ simple_add('methylation_platform','methylation_platform')
 simple_add('reporter_label','reporter_label')
 simple_add('age_at_diagnosis','age_at_diagnosis')
 simple_add('guid','dcf_indexd_guid')
+
+
+#Remove any rows where there is not a file associated with the entry
+cds_df=cds_df.dropna(subset=['file_url_in_cds'])
 
 
 #The not applicable transformation that takes any NAs in the data frame and applies "Not Applicable"
