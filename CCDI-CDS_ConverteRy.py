@@ -328,6 +328,11 @@ if 'study_id' in df_file.columns:
 
 #now add all specific data frames together
 df_join_all=pd.concat([df_join_sample_add, df_join_participant_add, df_join_study_add], axis=0)
+
+#To reduce complexity in the conversion, only lines where the personnel type is PI will be used in the CDS template end file.
+df_join_all=df_join_all[df_join_all['personnel_type']=='PI']
+
+#Drop the current index as it is causing issues
 df_join_all=df_join_all.reset_index(drop=True)
 
 
@@ -411,7 +416,11 @@ if len(df_join_all['number_of_samples'].dropna().unique().tolist())!=1:
 
 
     #REQUIRED in CCDI, but has to be reworked
+
+#Has been reworked to eliminate all non-PI entities earlier in the script, thus this next line can be more simple.
+#personnel_names=df_join_all[df_join_all['personnel_type']=='PI']['personnel_name'].dropna().unique().tolist()
 personnel_names=df_join_all['personnel_name'].dropna().unique().tolist()
+
 
 for personnel_name in personnel_names:
     # clear previous entry
@@ -444,7 +453,7 @@ for personnel_name in personnel_names:
     elif len(personnel_name)==1:
         last=personnel_name[0]
 
-    #NEEDS TO BE CHANGED SO THAT IS RETURNS THE VALUE AND NOT A COPY, USE df.loc TO HANDLE THIS
+    #Apply names to each row that are applicable
     for x in range(0,len(name_apply)):
         if name_apply[x]:
             cds_df.loc[x,'first_name']=first
@@ -503,9 +512,6 @@ simple_add('bases','number_of_bp')
 simple_add('number_of_reads','number_of_reads')
 simple_add('avg_read_length','avg_read_length')
 simple_add('coverage','coverage')
-
-
-
 simple_add('file_mapping_level','file_mapping_level')
 simple_add('adult_or_childhood_study','adult_or_childhood_study')
 simple_add('organism_species','organism_species')
