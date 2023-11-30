@@ -359,7 +359,7 @@ simple_add('study_acronym','study_acronym')
 simple_add('acl','acl')
 simple_add('email','email_address')
 simple_add('role_or_affiliation','personnel_type')
-simple_add('title','study_short_title')
+
 
 
     #NOT REQUIRED in CCDI, but can be derived via logic
@@ -434,10 +434,13 @@ for personnel_name in personnel_names:
     personnel_name=personnel_name.split(" ")
 
     prefix_delete=False
+    #Need to keep prefix as title, just remove for determining name simplicity
     prefixes=['Dr.','Dr','Mr.','Mr','Mrs.','Mrs','Ms.','Ms','Miss','Sir','Dame','Lord','Lady']
     first_name_part = personnel_name[0]
+    title=None
     if first_name_part in prefixes:
         prefix_delete=True
+        title=first_name_part
 
     if prefix_delete:
         del personnel_name[0]
@@ -456,6 +459,8 @@ for personnel_name in personnel_names:
     #Apply names to each row that are applicable
     for x in range(0,len(name_apply)):
         if name_apply[x]:
+            if title:
+                cds_df.loc[x,'title']=title
             cds_df.loc[x,'first_name']=first
             cds_df.loc[x,'middle_name']=middle
             cds_df.loc[x,'last_name']=last
