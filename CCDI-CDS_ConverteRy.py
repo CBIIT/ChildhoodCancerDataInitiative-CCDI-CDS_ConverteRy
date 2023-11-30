@@ -424,6 +424,7 @@ personnel_names=df_join_all['personnel_name'].dropna().unique().tolist()
 
 for personnel_name in personnel_names:
     # clear previous entry
+    title=None
     first=None
     middle=None
     last=None
@@ -432,12 +433,11 @@ for personnel_name in personnel_names:
     name_apply=(df_join_all['personnel_name']==personnel_name).tolist()
 
     personnel_name=personnel_name.split(" ")
-
     prefix_delete=False
     #Need to keep prefix as title, just remove for determining name simplicity
     prefixes=['Dr.','Dr','Mr.','Mr','Mrs.','Mrs','Ms.','Ms','Miss','Sir','Dame','Lord','Lady']
     first_name_part = personnel_name[0]
-    title=None
+    
     if first_name_part in prefixes:
         prefix_delete=True
         title=first_name_part
@@ -459,7 +459,7 @@ for personnel_name in personnel_names:
     #Apply names to each row that are applicable
     for x in range(0,len(name_apply)):
         if name_apply[x]:
-            if title:
+            if title is not None:
                 cds_df.loc[x,'title']=title
             cds_df.loc[x,'first_name']=first
             cds_df.loc[x,'middle_name']=middle
