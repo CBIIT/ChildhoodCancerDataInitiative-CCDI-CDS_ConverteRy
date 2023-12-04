@@ -123,6 +123,11 @@ ccdi_dfs= {}
 for sheet_name in ccdi_data.sheet_names:
     ccdi_dfs[sheet_name]= read_xlsx(ccdi_data, sheet_name)
 
+
+#ccdi nodes minus information nodes
+info_nodes=['README and INSTRUCTIONS', 'Dictionary', 'Terms and Value Sets']
+ccdi_nodes=[item for item in ccdi_data.sheet_names if item not in info_nodes]
+
 #nodes to include for CDS conversion
 ccdi_to_cds_nodes=['study','study_admin','study_personnel','participant','diagnosis','sample', 
                     'radiology_file', 'sequencing_file', 'clinical_measure_file', 'methylation_array_file', 
@@ -132,7 +137,7 @@ ccdi_to_cds_nodes=['study','study_admin','study_personnel','participant','diagno
 ## Go through each tab and remove completely empty tabs
 nodes_removed=[]
 
-for node in ccdi_to_cds_nodes:
+for node in ccdi_nodes:
     if node in ccdi_dfs:
         #see if the tab contain any data
         test_df=ccdi_dfs[node]
@@ -146,9 +151,8 @@ for node in ccdi_to_cds_nodes:
         nodes_removed.append(node)
 
 
-for node in nodes_removed:
-    if "cell_line" not in node or 'pdx' not in node:
-        print("WARNING: This submission contains 'cell_line' or 'pdx' entries in the submission.\n\tTHIS MAY CAUSE ERRORS IN THE RUN OR RETURNED SUBMISSION.")
+if "cell_line" not in nodes_removed or 'pdx' not in nodes_removed:
+    print("WARNING: This submission contains 'cell_line' or 'pdx' entries in the submission.\n\tTHIS MAY CAUSE ERRORS IN THE RUN OR RETURNED SUBMISSION FILE.\n\t\tDOUBLE CHECK THAT ALL DATA IS PRESENT IN THE OUTPUT.")
 
 ccdi_to_cds_nodes = [node for node in ccdi_to_cds_nodes if node not in nodes_removed]
 
