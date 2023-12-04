@@ -145,6 +145,11 @@ for node in ccdi_to_cds_nodes:
     else:
         nodes_removed.append(node)
 
+
+for node in nodes_removed:
+    if "cell_line" not in node or 'pdx' not in node:
+        print("WARNING: This submission contains 'cell_line' or 'pdx' entries in the submission.\n\tTHIS MAY CAUSE ERRORS IN THE RUN OR RETURNED SUBMISSION.")
+
 ccdi_to_cds_nodes = [node for node in ccdi_to_cds_nodes if node not in nodes_removed]
 
 
