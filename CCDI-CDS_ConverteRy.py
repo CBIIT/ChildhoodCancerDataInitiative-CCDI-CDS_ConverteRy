@@ -128,11 +128,6 @@ for sheet_name in ccdi_data.sheet_names:
 info_nodes=['README and INSTRUCTIONS', 'Dictionary', 'Terms and Value Sets']
 ccdi_nodes=[item for item in ccdi_data.sheet_names if item not in info_nodes]
 
-#nodes to include for CDS conversion
-ccdi_to_cds_nodes=['study','study_admin','study_personnel','participant','diagnosis','sample', 
-                    'radiology_file', 'sequencing_file', 'clinical_measure_file', 'methylation_array_file', 
-                    'cytogenomic_file', 'pathology_file', 'single_cell_sequencing_file']
-
 
 ## Go through each tab and remove completely empty tabs
 nodes_removed=[]
@@ -154,7 +149,8 @@ for node in ccdi_nodes:
 if "cell_line" not in nodes_removed or 'pdx' not in nodes_removed:
     print("WARNING: This submission contains 'cell_line' or 'pdx' entries in the submission.\n\tTHIS MAY CAUSE ERRORS IN THE RUN OR RETURNED SUBMISSION FILE.\n\t\tDOUBLE CHECK THAT ALL DATA IS PRESENT IN THE OUTPUT.")
 
-ccdi_to_cds_nodes = [node for node in ccdi_to_cds_nodes if node not in nodes_removed]
+#This was removed as the nodes required for CDS destroys paths that need to be walked to obtain the full data.
+ccdi_to_cds_nodes = [node for node in ccdi_nodes if node not in nodes_removed]
 
 
 ### MERGING OF ALL DATA
@@ -168,6 +164,10 @@ def drop_type_id_others(data_frame,others_list=[]):
         data_frame=data_frame.drop(['type'], axis=1)
     if 'id' in data_frame.columns:
         data_frame=data_frame.drop(['id'], axis=1)
+    if any(data_frame.columns.str.contains('\.id')):
+        dot_id_cols=data_frame.columns[data_frame.columns.str.contains('\.id')].tolist()
+        for dot_id_col in dot_id_cols:
+            data_frame=data_frame.drop([dot_id_col], axis=1)
     if others_list:
         for other in others_list:
             if other in data_frame.columns:
@@ -182,13 +182,13 @@ col_remap= {'study.study_id':'study_id', 'participant.participant_id':'participa
 
 #add study_admin
 if 'study_admin' in ccdi_to_cds_nodes:
-    df_node=drop_type_id_others(ccdi_dfs['study_admin'],['study.id'])
+    df_node=drop_type_id_others(ccdi_dfs['study_admin'])
     df_node.rename(columns=col_remap, inplace=True)
     df_all = pd.merge(df_all, df_node, how="left", on="study_id")
 
 #add study_personnel
 if 'study_personnel' in ccdi_to_cds_nodes:
-    df_node=drop_type_id_others(ccdi_dfs['study_personnel'],['study.id'])
+    df_node=drop_type_id_others(ccdi_dfs['study_personnel'])
     df_node.rename(columns=col_remap, inplace=True)
     df_all = pd.merge(df_all, df_node, how="left", on="study_id")
 
@@ -197,41 +197,18 @@ df_study_level=df_all
 
 #add participant
 if 'participant' in ccdi_to_cds_nodes:
-    df_node=drop_type_id_others(ccdi_dfs['participant'],['study.id'])
+    df_node=drop_type_id_others(ccdi_dfs['participant'])
     df_node.rename(columns=col_remap, inplace=True)
     df_all = pd.merge(df_all, df_node, how="left", on='study_id')
 
 #add diagnosis
 if 'diagnosis' in ccdi_to_cds_nodes:
-    df_node=drop_type_id_others(ccdi_dfs['diagnosis'],['participant.id'])
+    df_node=drop_type_id_others(ccdi_dfs['diagnosis'])
     df_node.rename(columns=col_remap, inplace=True)
     df_all = pd.merge(df_all, df_node, how="left", on='participant_id')
 
 #pull out df for diagnosis
 df_participant_level=df_all
-
-#add sample
-if 'sample' in ccdi_to_cds_nodes:
-    df_node=drop_type_id_others(ccdi_dfs['sample'],['participant.id'])
-    df_node.rename(columns=col_remap, inplace=True)
-    df_all = pd.merge(df_all, df_node, how="left", on='participant_id')
-
-#pull out df for sample
-df_sample_level=df_all
-
-# In order for CDS to get the most applicable information about diagnosis we will take the duplicate 
-# diagnosis information that comes from both sample and diagnosis and combine them into one column.
-# Since this duplication of columns occurs on the previous step where the addition of sample was made,
-# the sample properties have the '_y' suffix and thus we will combine the '_y' properties first in the
-# following section.
-
-for col in df_sample_level.columns.tolist():
-    if col.endswith("_x"):
-        col_x=col
-        col_base=col[:-2]
-        col_y=col_base+"_y"
-        df_sample_level[col_base] = df_sample_level[col_y].combine_first(df_sample_level[col_x])
-        df_sample_level.drop(columns=[col_x,col_y], inplace=True)
 
 
 #ALL [node]_file nodes will need to be concatenated first so there are no conflicts on common column names:
@@ -264,85 +241,355 @@ if 'clinical_measure_file' in ccdi_to_cds_nodes:
 df_file.rename(columns=col_remap, inplace=True)
 
 #drop off all the extra properties that are not required for transformation into a flattened data frame
-df_file=drop_type_id_others(df_file,['study.id', 'participant.id', 'sample.id', 'pdx.id', 'cell_line.id'])
-
-#Remove any partent column that might be there but is completely empty
-if 'sample_id' in df_file:
-    if len(df_file['sample_id'].dropna().unique().tolist())==0:
-        df_file=drop_type_id_others(df_file,['sample_id'])
-
-if 'participant_id' in df_file:
-    if len(df_file['participant_id'].dropna().unique().tolist())==0:
-        df_file=drop_type_id_others(df_file,['participant_id'])
-
-if 'study_id' in df_file:
-    if len(df_file['study_id'].dropna().unique().tolist())==0:
-        df_file=drop_type_id_others(df_file,['study_id'])        
+df_file=drop_type_id_others(df_file)
 
 
-#Make data frames to add based on relationships that are present
-df_join_sample_add=pd.DataFrame()
-df_join_participant_add=pd.DataFrame()
-df_join_study_add=pd.DataFrame()
+#START WITH FILES INSTEAD AND WALK EACH LINE BACK?
+#Based on each connection possible for the files walk it back manually by starting with the most likely connections
 
+def join_node(parent_df, child_df, join_by):
+    #get rid of book-keeping columns and rename linking columns to node level
+    parent_df=drop_type_id_others(parent_df)
+    parent_df.rename(columns=col_remap, inplace=True)
+    child_df=drop_type_id_others(child_df)
+    child_df.rename(columns=col_remap, inplace=True)
+    #get rid of rows that are empty for the join by key
+    child_df=child_df.dropna(subset=[join_by])
+    #merge data frames
+    df_joined = pd.merge(parent_df, child_df, how="left", on=join_by)
+    return df_joined
 
-#join on sample for all files that have a sample_id for linking
-if 'sample_id' in df_file.columns:
-    df_join_sample = pd.merge(df_sample_level, df_file, how= "left", on='sample_id')
-
-    #clean up possible duplicates where the sample level outranks file
-    for col in df_join_sample.columns.tolist():
+def join_file_node_cleaner(node_df):
+    #clean up data frame if there are _x and _y columns
+    #always giving preference to _x data frame which should be the parent data frame
+    for col in node_df.columns.tolist():
         if col.endswith("_x"):
             col_x=col
             col_base=col[:-2]
             col_y=col_base+"_y"
-            df_join_sample[col_base] = df_join_sample[col_x].combine_first(df_join_sample[col_y])
-            df_join_sample.drop(columns=[col_x,col_y], inplace=True)
+            node_df[col_base] = node_df[col_x].combine_first(node_df[col_y])
+            node_df.drop(columns=[col_x,col_y], inplace=True)
+    
+    #clean up the data frame, drop empty columns, rows that don't have files, reset index and remove duplicates.
+    if 'file_url_in_cds' in node_df.columns:
+        node_df=node_df.dropna(subset=['file_url_in_cds'])
+    node_df=node_df.dropna(axis=1, how= 'all')
+    node_df=node_df.reset_index(drop=True)
+    node_df=node_df.drop_duplicates()
+    return node_df
 
-    #remove all rows that do not have a sample_id, this is what sample will add
-    df_join_sample_add=df_join_sample[df_join_sample['sample_id'].notna()]
+#Do an empty check on the parent nodes before trying to join them
+#Since the final concatenation needs to have an object, each data frame will be made before the check to ensure it exists,
+#it will be removed from the final addition if it is an empty data frame.
+
+# file --> sample
+sample_file=pd.DataFrame()
+if 'sample' in ccdi_to_cds_nodes:
+    if 'sample_id' in df_file.columns:
+        sample_file=join_node(ccdi_dfs['sample'], df_file, 'sample_id')
+        sample_file=join_file_node_cleaner(sample_file)
+
+# file --> pdx
+pdx_file=pd.DataFrame()
+if 'pdx' in ccdi_to_cds_nodes:
+    if 'pdx_id' in df_file.columns:
+        pdx_file=join_node(ccdi_dfs['pdx'], df_file, 'pdx_id')
+        pdx_file=join_file_node_cleaner(pdx_file)
+
+# file --> cell_line
+cell_line_file=pd.DataFrame()
+if 'cell_line' in ccdi_to_cds_nodes:
+    if 'cell_line_id' in df_file.columns:
+        cell_line_file=join_node(ccdi_dfs['cell_line'], df_file, 'cell_line_id')
+        cell_line_file=join_file_node_cleaner(cell_line_file)
+
+# file --> participant
+participant_file=pd.DataFrame()
+if not df_participant_level.empty:
+    if 'participant_id' in df_file.columns:
+        participant_file=join_node(df_participant_level, df_file, 'participant_id')
+        participant_file=join_file_node_cleaner(participant_file)
+
+# file --> study
+study_file=pd.DataFrame()
+if not df_study_level.empty:
+    if 'study_id' in df_file.columns:
+        study_file=join_node(df_study_level, df_file, 'study_id')
+        study_file=join_file_node_cleaner(study_file)
 
 
-#join on participant for all files that have a participant_id for linking
-if 'participant_id' in df_file.columns:
-    df_join_participant = pd.merge(df_participant_level, df_file, how= "left", on='participant_id')
 
-    #clean up possible duplicates where the participant level outranks file
-    for col in df_join_participant.columns.tolist():
-        if col.endswith("_x"):
-            col_x=col
-            col_base=col[:-2]
-            col_y=col_base+"_y"
-            df_join_participant[col_base] = df_join_participant[col_x].combine_first(df_join_participant[col_y])
-            df_join_participant.drop(columns=[col_x,col_y], inplace=True)
+#Then for the nodes that don't end on either sample, participant or study, walk again and check.
+#This is likely to be deprecated later as having all files go to sample is the preferred method.
 
-    #remove all rows that do not have a participant_id, this is what participant will add
-    df_join_participant_add=df_join_participant[df_join_participant['participant_id'].notna()]
+# pdx_file --> sample
+sample_pdx_file=pd.DataFrame()
+if not pdx_file.empty:
+    if 'sample_id' in pdx_file.columns:
+        sample_pdx_file=join_node(ccdi_dfs['sample'], pdx_file, 'sample_id')
+        sample_pdx_file=join_file_node_cleaner(sample_pdx_file)
 
-#join on study for all files that have a study_id for linking
-if 'study_id' in df_file.columns:
-    df_join_study = pd.merge(df_study_level, df_file, how= "left", on='study_id')
+# pdx_file --> study
+study_pdx_file=pd.DataFrame()
+if not pdx_file.empty:
+    if 'study_id' in pdx_file.columns:
+        study_pdx_file=join_node(df_study_level,pdx_file, 'study_id')
+        study_pdx_file=join_file_node_cleaner(study_pdx_file)
 
-    #clean up possible duplicates where the study level outranks file
-    for col in df_join_study.columns.tolist():
-        if col.endswith("_x"):
-            col_x=col
-            col_base=col[:-2]
-            col_y=col_base+"_y"
-            df_join_study[col_base] = df_join_study[col_x].combine_first(df_join_study[col_y])
-            df_join_study.drop(columns=[col_x,col_y], inplace=True)
+# cell_line_file --> sample
+sample_cell_line_file=pd.DataFrame()
+if not cell_line_file.empty:
+    if 'sample_id' in cell_line_file.columns:
+        sample_cell_line_file=join_node(ccdi_dfs['sample'],cell_line_file, 'sample_id')
+        sample_cell_line_file=join_file_node_cleaner(sample_cell_line_file)
 
-    #remove all rows that do not have a study_id, this is what study will add
-    df_join_study_add=df_join_study[df_join_study['study_id'].notna()]
+# cell_line_file --> participant
+participant_cell_line_file=pd.DataFrame()
+if not cell_line_file.empty:
+    if 'participant_id' in cell_line_file.columns:
+        participant_cell_line_file=join_node(df_participant_level, cell_line_file, 'participant_id')
+        participant_cell_line_file=join_file_node_cleaner(participant_cell_line_file)
 
-#now add all specific data frames together
-df_join_all=pd.concat([df_join_sample_add, df_join_participant_add, df_join_study_add], axis=0)
+# cell_line_file --> study
+study_cell_line_file=pd.DataFrame()
+if not cell_line_file.empty:
+    if 'study_id' in cell_line_file.columns:
+        study_cell_line_file=join_node(df_study_level, cell_line_file, 'study_id')
+        study_cell_line_file=join_file_node_cleaner(study_cell_line_file)
+
+
+
+# If not all samples can link to a participant, then handle those exceptions
+
+# sample_file --> pdx
+pdx_sample_file=pd.DataFrame()
+if not sample_file.empty:
+    if 'pdx_id' in sample_file.columns:
+        pdx_sample_file=join_node(ccdi_dfs['pdx'], sample_file, 'pdx_id')
+        pdx_sample_file=join_file_node_cleaner(pdx_sample_file)
+
+# sample_file--> cell_line
+cell_line_sample_file=pd.DataFrame()
+if not sample_file.empty:
+    if 'cell_line_id' in sample_file.columns:
+        cell_line_sample_file=join_node(ccdi_dfs['cell_line'], sample_file, 'cell_line_id')
+        cell_line_sample_file=join_file_node_cleaner(cell_line_sample_file)
+
+
+
+# pdx_sample_file --> sample
+sample_pdx_sample_file=pd.DataFrame()
+#For entries that go from file-->sample-->[pdx/cell_line]-->sample
+#We have to remove the previous sample_ids in the file as they are confusing the join
+
+if not pdx_sample_file.empty:
+    if 'sample_id' in pdx_sample_file.columns:
+        sample_pdx_sample_file=join_node(ccdi_dfs['sample'], pdx_sample_file, 'sample_id')
+        sample_pdx_sample_file=join_file_node_cleaner(sample_pdx_sample_file)
+
+# pdx_sample_file --> study
+study_pdx_sample_file=pd.DataFrame()
+if not pdx_file.empty:
+    if 'study_id' in pdx_sample_file.columns:
+        study_pdx_sample_file=join_node(df_study_level,pdx_sample_file, 'study_id')
+        study_pdx_sample_file=join_file_node_cleaner(study_pdx_sample_file)
+
+# cell_line_sample_file --> sample
+sample_cell_line_sample_file=pd.DataFrame()
+if not cell_line_sample_file.empty:
+    if 'sample_id' in cell_line_sample_file.columns:
+        sample_cell_line_sample_file=join_node(ccdi_dfs['sample'], cell_line_sample_file, 'sample_id')
+        sample_cell_line_sample_file=join_file_node_cleaner(sample_cell_line_sample_file)
+
+# cell_line_sample_file --> participant
+participant_cell_line_sample_file=pd.DataFrame()
+if not cell_line_sample_file.empty:
+    if 'participant_id' in cell_line_sample_file.columns:
+        participant_cell_line_sample_file=join_node(df_participant_level, cell_line_sample_file, 'participant_id')
+        participant_cell_line_sample_file=join_file_node_cleaner(participant_cell_line_sample_file)
+
+# cell_line_sample_file --> study
+study_cell_line_sample_file=pd.DataFrame()
+if not cell_line_sample_file.empty:
+    if 'study_id' in cell_line_sample_file.columns:
+        study_cell_line_sample_file=join_node(df_study_level, cell_line_sample_file, 'study_id')
+        study_cell_line_sample_file=join_file_node_cleaner(study_cell_line_sample_file)
+
+
+# It is not likely to loop more than once as that would mean a pdx or cell_line was made from a sample of a pdx or cell_line.
+
+
+
+# Then handle the concatenation of the three main node end points:
+# Get everything up to sample, participant or study.
+# For all samples, we will join them with participant, which inherently has study information.
+# Then we will concatenate all the dfs into one large df, clean it up and we should get the same number of unique files.
+# Flattening files might cause duplicate rows, but this duplication is likely to leave when we pull out elements that are not usually multiple elements.
+
+### INFO ###
+#List of Outputs from the different joins
+# # file --> sample
+# sample_file
+# # file --> pdx
+# pdx_file
+# # file --> cell_line
+# cell_line_file
+# # file --> participant
+# participant_file
+# # file --> study
+# study_file
+# # pdx_file --> sample
+# sample_pdx_file
+# # pdx_file --> study
+# study_pdx_file
+# # cell_line_file --> sample
+# sample_cell_line_file
+# # cell_line_file --> participant
+# participant_cell_line_file
+# # cell_line_file --> study
+# study_cell_line_file
+# # sample_file --> pdx
+# pdx_sample_file
+# # sample_file--> cell_line
+# cell_line_sample_file
+# # pdx_sample_file --> sample
+# sample_pdx_sample_file
+# # pdx_sample_file --> study
+# study_pdx_sample_file
+# # cell_line_sample_file --> sample
+# sample_cell_line_sample_file
+# # cell_line_sample_file --> participant
+# participant_cell_line_sample_file
+# # cell_line_sample_file --> study
+# study_cell_line_sample_file
+### INFO ###
+
+
+### INFO ###
+#List of outputs from the different joins sorted by end points
+
+# #PDX
+# # file --> pdx
+# pdx_file
+# # sample_file --> pdx
+# pdx_sample_file
+
+# #Cell_line
+# # file --> cell_line
+# cell_line_file
+# # sample_file--> cell_line
+# cell_line_sample_file
+
+# #Sample
+# # file --> sample
+# sample_file
+# # pdx_file --> sample
+# sample_pdx_file
+# # cell_line_file --> sample
+# sample_cell_line_file
+# # pdx_sample_file --> sample
+# sample_pdx_sample_file
+# # cell_line_sample_file --> sample
+# sample_cell_line_sample_file
+
+# #Participant
+# # file --> participant
+# participant_file
+# # cell_line_file --> participant
+# participant_cell_line_file
+# # cell_line_sample_file --> participant
+# participant_cell_line_sample_file
+
+# #Study
+# # file --> study
+# study_file
+# # pdx_file --> study
+# study_pdx_file
+# # cell_line_file --> study
+# study_cell_line_file
+# # pdx_sample_file --> study
+# study_pdx_sample_file
+# # cell_line_sample_file --> study
+# study_cell_line_sample_file
+### INFO ###
+
+#The PDX and Cell_line outputs can be ignored as they must go to sample, participant or study.
+#The participant and study can be set aside as they should be able to be concatenated at the end.
+
+# Take the samples and attach to df_participant_level or df_study_level
+
+# sample_file --> participant
+participant_sample_file=pd.DataFrame()
+if not sample_file.empty:
+    if 'participant_id' in sample_file.columns:
+        participant_sample_file=join_node(df_participant_level, sample_file, 'participant_id')
+        participant_sample_file=join_file_node_cleaner(participant_sample_file)
+
+# sample_pdx_file --> participant
+participant_sample_pdx_file=pd.DataFrame()
+if not sample_pdx_file.empty:
+    if 'participant_id' in sample_pdx_file.columns:
+        participant_sample_pdx_file=join_node(df_participant_level, sample_pdx_file, 'participant_id')
+        participant_sample_pdx_file=join_file_node_cleaner(participant_sample_pdx_file)
+
+# sample_cell_line_file --> participant
+participant_sample_cell_line_file=pd.DataFrame()
+if not sample_cell_line_file.empty:
+    if 'participant_id' in sample_cell_line_file.columns:
+        participant_sample_cell_line_file=join_node(df_participant_level, sample_cell_line_file, 'participant_id')
+        participant_sample_cell_line_file=join_file_node_cleaner(participant_sample_cell_line_file)
+
+# sample_pdx_sample_file --> participant
+participant_sample_pdx_sample_file=pd.DataFrame()
+if not sample_pdx_sample_file.empty:
+    if 'participant_id' in sample_pdx_sample_file.columns:
+        participant_sample_pdx_sample_file=join_node(df_participant_level, sample_pdx_sample_file, 'participant_id')
+        participant_sample_pdx_sample_file=join_file_node_cleaner(participant_sample_pdx_sample_file)
+
+# sample_cell_line_sample_file --> participant
+participant_sample_cell_line_sample_file=pd.DataFrame()
+if not sample_cell_line_sample_file.empty:
+    if 'participant_id' in sample_cell_line_sample_file.columns:
+        participant_sample_cell_line_sample_file=join_node(df_participant_level, sample_cell_line_sample_file, 'participant_id')
+        participant_sample_cell_line_sample_file=join_file_node_cleaner(participant_sample_cell_line_sample_file)
+
+# sample_pdx_sample_file --> study
+study_sample_pdx_sample_file=pd.DataFrame()
+if not sample_pdx_sample_file.empty:
+    if 'study_id' in sample_pdx_sample_file.columns:
+        study_sample_pdx_sample_file=join_node(df_study_level, sample_pdx_sample_file, 'study_id')
+        study_sample_pdx_sample_file=join_file_node_cleaner(study_sample_pdx_sample_file)
+
+
+#List of all paths that can be derived from files that either end at study or participant (which has study information)
+all_paths=[participant_file,
+        participant_cell_line_file,
+        participant_cell_line_sample_file,
+        participant_sample_file,
+        participant_sample_pdx_file,
+        participant_sample_cell_line_file,
+        participant_sample_pdx_sample_file,
+        participant_sample_cell_line_sample_file,
+        study_file,
+        study_pdx_file,
+        study_cell_line_file,
+        study_pdx_sample_file,
+        study_cell_line_sample_file,
+        study_sample_pdx_sample_file]
+
+
+df_join_all=pd.DataFrame()
+
+for node_path in all_paths:
+    if not node_path.empty:
+        df_join_all=pd.concat([df_join_all, node_path], axis=0)
 
 #To reduce complexity in the conversion, only lines where the personnel type is PI will be used in the CDS template end file.
 df_join_all=df_join_all[df_join_all['personnel_type']=='PI']
 
 #Drop the current index as it is causing issues
 df_join_all=df_join_all.reset_index(drop=True)
+
 
 
 ###############
@@ -405,22 +652,32 @@ elif len(df_join_all['study_data_types'].dropna().unique().tolist())<1:
         #if there is a study_name
 if len(df_join_all['study_name'].dropna().unique().tolist())==1:
     cds_df['study_name']=df_join_all['study_name']
+
+
         #if there isn't a study_name
 if len(df_join_all['study_name'].dropna().unique().tolist())!=1:
     cds_df['study_name']=df_join_all['study_short_title']
 
+#if there is a number_of_participants value
+if 'number_of_participants' in df_join_all.columns:
         #if there is a number_of_participants
-if len(df_join_all['number_of_participants'].dropna().unique().tolist())==1:
-    cds_df['number_of_participants']=df_join_all['number_of_participants']
-        #if there isn't a number_of_participants
-if len(df_join_all['number_of_participants'].dropna().unique().tolist())!=1:
+    if len(df_join_all['number_of_participants'].dropna().unique().tolist())==1:
+        cds_df['number_of_participants']=df_join_all['number_of_participants']
+            #if there isn't a number_of_participants
+    if len(df_join_all['number_of_participants'].dropna().unique().tolist())!=1:
+        cds_df['number_of_participants']=1
+else:
     cds_df['number_of_participants']=1
 
+#if there is a number_of_samples value
+if 'number_of_samples' in df_join_all.columns:
         #if there is a number_of_samples
-if len(df_join_all['number_of_samples'].dropna().unique().tolist())==1:
-    cds_df['number_of_samples']=df_join_all['number_of_samples']
-        #if there isn't a number_of_samples
-if len(df_join_all['number_of_samples'].dropna().unique().tolist())!=1:
+    if len(df_join_all['number_of_samples'].dropna().unique().tolist())==1:
+        cds_df['number_of_samples']=df_join_all['number_of_samples']
+            #if there isn't a number_of_samples
+    if len(df_join_all['number_of_samples'].dropna().unique().tolist())!=1:
+        cds_df['number_of_samples']=1
+else:
     cds_df['number_of_samples']=1
 
 
@@ -510,6 +767,7 @@ simple_add('design_description','design_description')
 
 
     #Not required in CCDI (further logic needed)
+
     #If it is there, it gets added, if not it will be changed to "Not Applicable" by later transformation
 simple_add('reference_genome_assembly','reference_genome_assembly')
 
@@ -539,10 +797,33 @@ simple_add('guid','dcf_indexd_guid')
 cds_df=cds_df.dropna(subset=['file_url_in_cds'])
 
 
+#Minor fix, if sample_id has no value, then sample_type should not have a value.
+cds_df.loc[cds_df['sample_id'].isnull(), 'sample_type'] = None
+#Minor fix, if age_at_diagnosis is unknown in CCDI (-999), remove that value as it is not required for CDS.
+cds_df.loc[cds_df['age_at_diagnosis']=='-999', 'age_at_diagnosis'] = None
+
+cds_df['sample_type']
 #The not applicable transformation that takes any NAs in the data frame and applies "Not Applicable"
 #to the fields that are missing this required data.
 
 cds_df[cds_req_props]=cds_df[cds_req_props].fillna("Not Applicable")
+
+cds_df=cds_df.drop_duplicates()
+
+
+#Quick stats to check the conversion, make sure things are working as we think they should be.
+file_expected=len(df_file.loc[:,['md5sum','file_name','file_url_in_cds']].drop_duplicates())
+file_returned=len(cds_df.loc[:,['md5sum','file_name','file_url_in_cds']].drop_duplicates())
+
+print("\nFor the following conversion:")
+print(f'\n\tUnique files expected: {file_expected}')
+print(f'\n\tUnique files returned: {file_returned}')
+
+if file_expected == file_returned:
+    print('\n\t\tThe conversion was likely a success, please double check your files.')
+elif file_expected != file_returned:
+    print('\n\t\tThe conversion was likely NOT successful, as it did not return the same number of unique files.')
+
 
 
 ##############
