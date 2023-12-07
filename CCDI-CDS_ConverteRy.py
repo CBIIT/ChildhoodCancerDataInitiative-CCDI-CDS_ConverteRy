@@ -521,38 +521,44 @@ if not cell_line_sample_file.empty:
 # sample_file --> participant
 participant_sample_file=pd.DataFrame()
 if not sample_file.empty:
-    participant_sample_file=join_node(df_participant_level, sample_file, 'participant_id')
-    participant_sample_file=join_file_node_cleaner(participant_sample_file)
+    if 'participant_id' in sample_file.columns:
+        participant_sample_file=join_node(df_participant_level, sample_file, 'participant_id')
+        participant_sample_file=join_file_node_cleaner(participant_sample_file)
 
 # sample_pdx_file --> participant
 participant_sample_pdx_file=pd.DataFrame()
 if not sample_pdx_file.empty:
-    participant_sample_pdx_file=join_node(df_participant_level, sample_pdx_file, 'participant_id')
-    participant_sample_pdx_file=join_file_node_cleaner(participant_sample_pdx_file)
+    if 'participant_id' in sample_pdx_file.columns:
+        participant_sample_pdx_file=join_node(df_participant_level, sample_pdx_file, 'participant_id')
+        participant_sample_pdx_file=join_file_node_cleaner(participant_sample_pdx_file)
 
 # sample_cell_line_file --> participant
 participant_sample_cell_line_file=pd.DataFrame()
 if not sample_cell_line_file.empty:
-    participant_sample_cell_line_file=join_node(df_participant_level, sample_cell_line_file, 'participant_id')
-    participant_sample_cell_line_file=join_file_node_cleaner(participant_sample_cell_line_file)
+    if 'participant_id' in sample_cell_line_file.columns:
+        participant_sample_cell_line_file=join_node(df_participant_level, sample_cell_line_file, 'participant_id')
+        participant_sample_cell_line_file=join_file_node_cleaner(participant_sample_cell_line_file)
 
 # sample_pdx_sample_file --> participant
 participant_sample_pdx_sample_file=pd.DataFrame()
 if not sample_pdx_sample_file.empty:
-    participant_sample_pdx_sample_file=join_node(df_participant_level, sample_pdx_sample_file, 'participant_id')
-    participant_sample_pdx_sample_file=join_file_node_cleaner(participant_sample_pdx_sample_file)
+    if 'participant_id' in sample_pdx_sample_file.columns:
+        participant_sample_pdx_sample_file=join_node(df_participant_level, sample_pdx_sample_file, 'participant_id')
+        participant_sample_pdx_sample_file=join_file_node_cleaner(participant_sample_pdx_sample_file)
 
 # sample_cell_line_sample_file --> participant
 participant_sample_cell_line_sample_file=pd.DataFrame()
 if not sample_cell_line_sample_file.empty:
-    participant_sample_cell_line_sample_file=join_node(df_participant_level, sample_cell_line_sample_file, 'participant_id')
-    participant_sample_cell_line_sample_file=join_file_node_cleaner(participant_sample_cell_line_sample_file)
+    if 'participant_id' in sample_cell_line_sample_file.columns:
+        participant_sample_cell_line_sample_file=join_node(df_participant_level, sample_cell_line_sample_file, 'participant_id')
+        participant_sample_cell_line_sample_file=join_file_node_cleaner(participant_sample_cell_line_sample_file)
 
 # sample_pdx_sample_file --> study
 study_sample_pdx_sample_file=pd.DataFrame()
 if not sample_pdx_sample_file.empty:
-    study_sample_pdx_sample_file=join_node(df_study_level, sample_pdx_sample_file, 'study_id')
-    study_sample_pdx_sample_file=join_file_node_cleaner(study_sample_pdx_sample_file)
+    if 'study_id' in sample_pdx_sample_file.columns:
+        study_sample_pdx_sample_file=join_node(df_study_level, sample_pdx_sample_file, 'study_id')
+        study_sample_pdx_sample_file=join_file_node_cleaner(study_sample_pdx_sample_file)
 
 
 #List of all paths that can be derived from files that either end at study or participant (which has study information)
@@ -793,6 +799,7 @@ cds_df=cds_df.dropna(subset=['file_url_in_cds'])
 
 #Minor fix, if sample_id has no value, then sample_type should not have a value.
 cds_df.loc[cds_df['sample_id'].isnull(), 'sample_type'] = None
+#Minor fix, if age_at_diagnosis is unknown in CCDI (-999), remove that value as it is not required for CDS.
 cds_df.loc[cds_df['age_at_diagnosis']=='-999', 'age_at_diagnosis'] = None
 
 cds_df['sample_type']
