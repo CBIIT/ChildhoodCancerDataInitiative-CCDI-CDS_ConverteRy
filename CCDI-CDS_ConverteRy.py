@@ -802,7 +802,6 @@ cds_df.loc[cds_df['sample_id'].isnull(), 'sample_type'] = None
 #Minor fix, if age_at_diagnosis is unknown in CCDI (-999), remove that value as it is not required for CDS.
 cds_df.loc[cds_df['age_at_diagnosis']=='-999', 'age_at_diagnosis'] = None
 
-cds_df['sample_type']
 #The not applicable transformation that takes any NAs in the data frame and applies "Not Applicable"
 #to the fields that are missing this required data.
 
