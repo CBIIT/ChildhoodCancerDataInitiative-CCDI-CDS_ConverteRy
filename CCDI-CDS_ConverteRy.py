@@ -518,11 +518,30 @@ if not cell_line_sample_file.empty:
 
 # Take the samples and attach to df_participant_level or df_study_level
 
+
+#Due to sample_type being a property that CCDI does not have and instead CCDI anatomic_site is used instead
+#we run into an issue where there are two anatomic_site properties that are being used, one in sample and the other in diagnosis.
+#In this context it makes more sense to use the samples.anatomic_site, which is counter to how the script handles most other conflicts.
+#The script treats the parent node's properties as the value to overwrite with, but in this one case we have to switch this to be more inline
+#with CDS, and hopefully prevent duplicate values.
+
+#Thus for the following node joins before the join_file_node_cleaner, part of that code will be used to do the reverse clean up ONLY for anatomic_site
+# and only when it is linking to the participant level.
+
 # sample_file --> participant
 participant_sample_file=pd.DataFrame()
 if not sample_file.empty:
     if 'participant_id' in sample_file.columns:
         participant_sample_file=join_node(df_participant_level, sample_file, 'participant_id')
+
+        #Handle the reverse situation of anatomic_site
+        if "anatomic_site_x" in participant_sample_file.columns:
+            col_x="anatomic_site_x"
+            col_base=col_x[:-2]
+            col_y=col_base+"_y"
+            participant_sample_file[col_base] = participant_sample_file[col_y].combine_first(participant_sample_file[col_x])
+            participant_sample_file.drop(columns=[col_x,col_y], inplace=True)
+
         participant_sample_file=join_file_node_cleaner(participant_sample_file)
 
 # sample_pdx_file --> participant
@@ -530,6 +549,15 @@ participant_sample_pdx_file=pd.DataFrame()
 if not sample_pdx_file.empty:
     if 'participant_id' in sample_pdx_file.columns:
         participant_sample_pdx_file=join_node(df_participant_level, sample_pdx_file, 'participant_id')
+
+        #Handle the reverse situation of anatomic_site
+        if "anatomic_site_x" in participant_sample_pdx_file.columns:
+            col_x="anatomic_site_x"
+            col_base=col_x[:-2]
+            col_y=col_base+"_y"
+            participant_sample_pdx_file[col_base] = participant_sample_pdx_file[col_y].combine_first(participant_sample_pdx_file[col_x])
+            participant_sample_pdx_file.drop(columns=[col_x,col_y], inplace=True)
+
         participant_sample_pdx_file=join_file_node_cleaner(participant_sample_pdx_file)
 
 # sample_cell_line_file --> participant
@@ -537,6 +565,15 @@ participant_sample_cell_line_file=pd.DataFrame()
 if not sample_cell_line_file.empty:
     if 'participant_id' in sample_cell_line_file.columns:
         participant_sample_cell_line_file=join_node(df_participant_level, sample_cell_line_file, 'participant_id')
+
+        #Handle the reverse situation of anatomic_site
+        if "anatomic_site_x" in participant_sample_cell_line_file.columns:
+            col_x="anatomic_site_x"
+            col_base=col_x[:-2]
+            col_y=col_base+"_y"
+            participant_sample_cell_line_file[col_base] = participant_sample_cell_line_file[col_y].combine_first(participant_sample_cell_line_file[col_x])
+            participant_sample_cell_line_file.drop(columns=[col_x,col_y], inplace=True)
+
         participant_sample_cell_line_file=join_file_node_cleaner(participant_sample_cell_line_file)
 
 # sample_pdx_sample_file --> participant
@@ -544,6 +581,15 @@ participant_sample_pdx_sample_file=pd.DataFrame()
 if not sample_pdx_sample_file.empty:
     if 'participant_id' in sample_pdx_sample_file.columns:
         participant_sample_pdx_sample_file=join_node(df_participant_level, sample_pdx_sample_file, 'participant_id')
+
+        #Handle the reverse situation of anatomic_site
+        if "anatomic_site_x" in participant_sample_pdx_sample_file.columns:
+            col_x="anatomic_site_x"
+            col_base=col_x[:-2]
+            col_y=col_base+"_y"
+            participant_sample_pdx_sample_file[col_base] = participant_sample_pdx_sample_file[col_y].combine_first(participant_sample_pdx_sample_file[col_x])
+            participant_sample_pdx_sample_file.drop(columns=[col_x,col_y], inplace=True)
+
         participant_sample_pdx_sample_file=join_file_node_cleaner(participant_sample_pdx_sample_file)
 
 # sample_cell_line_sample_file --> participant
@@ -551,6 +597,15 @@ participant_sample_cell_line_sample_file=pd.DataFrame()
 if not sample_cell_line_sample_file.empty:
     if 'participant_id' in sample_cell_line_sample_file.columns:
         participant_sample_cell_line_sample_file=join_node(df_participant_level, sample_cell_line_sample_file, 'participant_id')
+
+        #Handle the reverse situation of anatomic_site
+        if "anatomic_site_x" in participant_sample_cell_line_sample_file.columns:
+            col_x="anatomic_site_x"
+            col_base=col_x[:-2]
+            col_y=col_base+"_y"
+            participant_sample_cell_line_sample_file[col_base] = participant_sample_cell_line_sample_file[col_y].combine_first(participant_sample_cell_line_sample_file[col_x])
+            participant_sample_cell_line_sample_file.drop(columns=[col_x,col_y], inplace=True)
+
         participant_sample_cell_line_sample_file=join_file_node_cleaner(participant_sample_cell_line_sample_file)
 
 # sample_pdx_sample_file --> study
@@ -586,6 +641,34 @@ for node_path in all_paths:
 
 #To reduce complexity in the conversion, only lines where the personnel type is PI will be used in the CDS template end file.
 df_join_all=df_join_all[df_join_all['personnel_type']=='PI']
+
+#Drop the current index as it is causing issues
+df_join_all=df_join_all.reset_index(drop=True)
+
+#To try and preserve synonym links this section will join the synonyms if the data exists.
+synonym_df=ccdi_dfs['synonym']
+synonym_df.rename(columns=col_remap, inplace=True)
+
+if 'participant_id' in synonym_df.columns:
+    df_join_all=join_node(df_join_all, synonym_df, 'participant_id')
+    df_join_all=join_file_node_cleaner(df_join_all)
+    #now we need to move participant_ids that are related to dbGaP over to the property `dbGaP_subject_id`
+    #if statment because we are not asssured that links are correctly made
+    if 'repository_of_synonym_id' in df_join_all.columns:
+        df_join_all['dbGaP_subject_id']=df_join_all.loc[df_join_all['repository_of_synonym_id']=='dbGaP','synonym_id']
+
+if 'synonym_id' in df_join_all.columns:
+    df_join_all=df_join_all.drop('synonym_id',axis=1)
+if 'repository_of_synonym_id' in df_join_all.columns:
+    df_join_all=df_join_all.drop('repository_of_synonym_id', axis=1)
+
+if 'sample_id' in synonym_df.columns:
+    df_join_all=join_node(df_join_all, synonym_df, 'sample_id')
+    df_join_all=join_file_node_cleaner(df_join_all)
+    #now we need to move sample_ids that are related to BioSample over to the property `dbGaP_subject_id`
+    #if statment because we are not asssured that links are correctly made
+    if 'repository_of_synonym_id' in df_join_all.columns:
+        df_join_all['biosample_accession']=df_join_all.loc[df_join_all['repository_of_synonym_id']=='BioSample','synonym_id']
 
 #Drop the current index as it is causing issues
 df_join_all=df_join_all.reset_index(drop=True)
@@ -746,9 +829,10 @@ else:
 
 #sample
 simple_add('sample_id','sample_id')
-
-    #anatomic site is the closing approximation we can get
+    #anatomic site is the closest approximation we can get, but it will be wrong most likely
 simple_add('sample_type','anatomic_site')
+    #this script will also put CCDI anatomic site in sample_anatomic_site for CDS as that is a better fit
+simple_add('sample_anatomic_site','anatomic_site')
 
 #file
 simple_add('file_name','file_name')
@@ -789,18 +873,32 @@ simple_add('adult_or_childhood_study','adult_or_childhood_study')
 simple_add('organism_species','organism_species')
 simple_add('methylation_platform','methylation_platform')
 simple_add('reporter_label','reporter_label')
-simple_add('age_at_diagnosis','age_at_diagnosis')
+simple_add('sample_description','sample_description')
+simple_add('sample_tumor_status','sample_tumor_status')
+simple_add('sequence_alignment_software','sequence_alignment_software')
+simple_add('tumor_grade','tumor_grade')
+simple_add('tumor_stage_clinical_t','tumor_stage_clinical_t')
+simple_add('tumor_stage_clinical_n','tumor_stage_clinical_n')
+simple_add('tumor_stage_clinical_m','tumor_stage_clinical_m')
+simple_add('dbGaP_subject_id','dbGaP_subject_id')
+simple_add('biosample_accession','biosample_accession')
 simple_add('guid','dcf_indexd_guid')
+
+#This property has been removed as it is not required by CDS and it is often a source for multiple lines for the same file
+# simple_add('age_at_diagnosis','age_at_diagnosis')
 
 
 #Remove any rows where there is not a file associated with the entry
 cds_df=cds_df.dropna(subset=['file_url_in_cds'])
 
 
-#Minor fix, if sample_id has no value, then sample_type should not have a value.
+#Minor fix, if sample_id has no value, then sample_type/sample_anatomic_site should not have a value.
 cds_df.loc[cds_df['sample_id'].isnull(), 'sample_type'] = None
+cds_df.loc[cds_df['sample_id'].isnull(), 'sample_anatomic_site'] = None
+
+#Removed from output, see above
 #Minor fix, if age_at_diagnosis is unknown in CCDI (-999), remove that value as it is not required for CDS.
-cds_df.loc[cds_df['age_at_diagnosis']=='-999', 'age_at_diagnosis'] = None
+#cds_df.loc[cds_df['age_at_diagnosis']=='-999', 'age_at_diagnosis'] = None
 
 #The not applicable transformation that takes any NAs in the data frame and applies "Not Applicable"
 #to the fields that are missing this required data.
