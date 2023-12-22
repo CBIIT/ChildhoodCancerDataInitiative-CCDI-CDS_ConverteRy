@@ -130,20 +130,23 @@ ccdi_nodes=[item for item in ccdi_data.sheet_names if item not in info_nodes]
 
 
 ## Go through each tab and remove completely empty tabs
-nodes_removed=[]
+nodes_removed = []
 
 for node in ccdi_nodes:
     if node in ccdi_dfs:
-        #see if the tab contain any data
-        test_df=ccdi_dfs[node]
-        test_df=test_df.drop('type', axis=1)
-        test_df=test_df.dropna(how='all').dropna(how='all', axis=1)
-        #if there is no data, drop the node/tab
+        # see if the tab contain any data
+        test_df = ccdi_dfs[node]
+        test_df = test_df.drop("type", axis=1)
+        test_df = test_df.dropna(how="all").dropna(how="all", axis=1)
+        # if there is no data, drop the node/tab
         if test_df.empty:
-            del ccdi_dfs[node]
             nodes_removed.append(node)
+        else:
+            pass
     else:
         nodes_removed.append(node)
+
+ccdi_dfs = {key: ccdi_dfs[key] for key in ccdi_dfs if key not in nodes_removed}  
 
 
 if "cell_line" not in nodes_removed or 'pdx' not in nodes_removed:
@@ -646,29 +649,30 @@ df_join_all=df_join_all[df_join_all['personnel_type']=='PI']
 df_join_all=df_join_all.reset_index(drop=True)
 
 #To try and preserve synonym links this section will join the synonyms if the data exists.
-synonym_df=ccdi_dfs['synonym']
-synonym_df.rename(columns=col_remap, inplace=True)
+if 'synonym' in ccdi_to_cds_nodes:
+    synonym_df=ccdi_dfs['synonym']
+    synonym_df.rename(columns=col_remap, inplace=True)
 
-if 'participant_id' in synonym_df.columns:
-    df_join_all=join_node(df_join_all, synonym_df, 'participant_id')
-    df_join_all=join_file_node_cleaner(df_join_all)
-    #now we need to move participant_ids that are related to dbGaP over to the property `dbGaP_subject_id`
-    #if statment because we are not asssured that links are correctly made
+    if 'participant_id' in synonym_df.columns:
+        df_join_all=join_node(df_join_all, synonym_df, 'participant_id')
+        df_join_all=join_file_node_cleaner(df_join_all)
+        #now we need to move participant_ids that are related to dbGaP over to the property `dbGaP_subject_id`
+        #if statment because we are not asssured that links are correctly made
+        if 'repository_of_synonym_id' in df_join_all.columns:
+            df_join_all['dbGaP_subject_id']=df_join_all.loc[df_join_all['repository_of_synonym_id']=='dbGaP','synonym_id']
+
+    if 'synonym_id' in df_join_all.columns:
+        df_join_all=df_join_all.drop('synonym_id',axis=1)
     if 'repository_of_synonym_id' in df_join_all.columns:
-        df_join_all['dbGaP_subject_id']=df_join_all.loc[df_join_all['repository_of_synonym_id']=='dbGaP','synonym_id']
+        df_join_all=df_join_all.drop('repository_of_synonym_id', axis=1)
 
-if 'synonym_id' in df_join_all.columns:
-    df_join_all=df_join_all.drop('synonym_id',axis=1)
-if 'repository_of_synonym_id' in df_join_all.columns:
-    df_join_all=df_join_all.drop('repository_of_synonym_id', axis=1)
-
-if 'sample_id' in synonym_df.columns:
-    df_join_all=join_node(df_join_all, synonym_df, 'sample_id')
-    df_join_all=join_file_node_cleaner(df_join_all)
-    #now we need to move sample_ids that are related to BioSample over to the property `dbGaP_subject_id`
-    #if statment because we are not asssured that links are correctly made
-    if 'repository_of_synonym_id' in df_join_all.columns:
-        df_join_all['biosample_accession']=df_join_all.loc[df_join_all['repository_of_synonym_id']=='BioSample','synonym_id']
+    if 'sample_id' in synonym_df.columns:
+        df_join_all=join_node(df_join_all, synonym_df, 'sample_id')
+        df_join_all=join_file_node_cleaner(df_join_all)
+        #now we need to move sample_ids that are related to BioSample over to the property `dbGaP_subject_id`
+        #if statment because we are not asssured that links are correctly made
+        if 'repository_of_synonym_id' in df_join_all.columns:
+            df_join_all['biosample_accession']=df_join_all.loc[df_join_all['repository_of_synonym_id']=='BioSample','synonym_id']
 
 #Drop the current index as it is causing issues
 df_join_all=df_join_all.reset_index(drop=True)
@@ -821,11 +825,16 @@ simple_add('participant_id','participant_id')
     #Not a perfect match, some logic required depending on version of CCDI
     #Also need to deconstruct the setup from `code : term` ----> `term`
 if 'diagnosis_icd_o' in df_join_all.columns:
-    cds_df['primary_diagnosis']=df_join_all['diagnosis_icd_o'].str.split(":").str[1].str.strip()
+    cds_df['primary_diagnosis']=df_join_all['diagnosis_icd_o']
 elif 'diagnosis_classification' in df_join_all.columns:
-    cds_df['primary_diagnosis']=df_join_all['diagnosis_classification'].str.split(":").str[1].str.strip()
+    cds_df['primary_diagnosis']=df_join_all['diagnosis_classification']
+    #further diagnosis handling for "see diagnosis_comment" copying
+    comment_true = cds_df['primary_diagnosis'] == "see diagnosis_comment"
+    cds_df.loc[comment_true, 'primary_diagnosis'] = df_join_all.loc[comment_true, 'diagnosis_comment']
 else:
     print("ERROR: No 'primary_diagnosis' was transfered.")
+
+
 
 #sample
 simple_add('sample_id','sample_id')
