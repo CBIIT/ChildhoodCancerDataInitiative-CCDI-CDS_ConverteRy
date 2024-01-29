@@ -1,4 +1,4 @@
-# ChildhoodCancerDataInitiative-CCDI_to_CDS_ConverteRy
+# ChildhoodCancerDataInitiative-CCDI_to_CDS_ConverteRy (ARCHIVED)
 This script will take a [CCDI submission template](https://github.com/CBIIT/ccdi-model/tree/main/metadata-manifest) and transform it to a flattened [CDS submission template](https://github.com/CBIIT/cds-model/tree/main/metadata-manifest).
 
 Run the following command in a terminal where python is installed for help.
